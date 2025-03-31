@@ -1,10 +1,10 @@
 # Czech Supreme Administrative Court (NSS) Decision Downloader
 
-This application is designed to download and convert Czech Supreme Administrative Court decisions. The tool provides a GUI that allows users to filter the decisions by date, type, or Excel-applied filters, download them, and then convert the downloaded PDFs into plain text files.
+This application is designed to download and convert Czech Supreme Administrative Court decisions. The tool provides a GUI that allows users to filter the decisions by date or Excel-applied filters, download them, and then convert the downloaded PDFs into plain text files.
 
 ## Features
 
-- **Download Supreme Administrative Court Decisions**: Automatically download decisions based on a specified date range, decision type, or visible (non-hidden) Excel rows.
+- **Download Supreme Administrative Court Decisions**: Automatically download decisions based on a specified date range or visible (non-hidden) Excel rows.
 - **Excel Filtering Support**: Option to respect filters or visible rows directly applied in the Excel sheet.
 - **Convert PDFs to Text**: Convert the downloaded PDF files to TXT format for easier analysis or processing.
 - **User-Friendly GUI**: Simple graphical interface with options to start/stop the download and conversion processes.
@@ -79,3 +79,7 @@ Created by [Oldřich Tristan Florian](https://otflorian.com), who publishes unde
 ## License
 
 This project is licensed under a custom license. Please see the [LICENSE](LICENSE) file for details.
+
+## Purpose
+
+The official search engine of the Czech Supreme Administrative Court (NSS) does not support bulk downloading of decisions, which poses a limitation for research and data analysis. This application addresses that issue by working with the _Otevřená data k soudní činnosti_ dataset. Users can apply filters directly in Excel and then use the tool to automatically download all visible decisions at once. The downloaded PDFs can be converted into plain text files, enabling content-based quantitative analysis. Future plans include experimenting with machine learning models trained on NSS case law and associated metadata.
