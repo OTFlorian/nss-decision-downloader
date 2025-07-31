@@ -2,7 +2,6 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from tkcalendar import DateEntry
 from downloader import PDFDownloader
 from converter import PDFConverter
 import webbrowser
@@ -14,17 +13,23 @@ class NSSDecisionDownloader(tk.Tk):
         self.geometry("650x700")
 
         # Variables to store file paths
-        self.xlsx_file_path = tk.StringVar()
+        self.input_file_path = tk.StringVar()
         self.destination_dir = tk.StringVar()
+
+        # File type (xlsx or xml) detected automatically from the input file.
+        # Start with no default value until a file is selected.
+        self.file_type = tk.StringVar(value="")
+        self.file_type_label_var = tk.StringVar(value="")
+        # Update file type when the input path changes (e.g., user edits the
+        # entry manually)
+        self.input_file_path.trace_add(
+            "write", lambda *_: self.detect_file_type())
 
         # Excel filtering option enabled by default
         self.use_excel_filter = tk.BooleanVar()
         self.use_excel_filter.set(True)
 
         # Filtering options
-        self.use_date_filter = tk.BooleanVar()
-        self.start_date = "2003-01-01"  # Default start date
-        self.end_date = tk.StringVar()
 
         # Decision type filtering options removed from the GUI.
         # (The variables remain defined but will not be used.)
@@ -45,30 +50,24 @@ class NSSDecisionDownloader(tk.Tk):
         credit_label.bind("<Button-1>", lambda e: self.open_link("https://otflorian.com"))
 
         # UI Elements for selecting files and folders
-        tk.Label(self, text="Select Excel File (Otevřená data k soudní činnosti)").pack(pady=5)
-        tk.Entry(self, textvariable=self.xlsx_file_path, width=60).pack(pady=5)
-        tk.Button(self, text="Browse", command=self.browse_xlsx).pack(pady=5)
+        tk.Label(self, text="Select Input File (XLSX open data or XML export)").pack(pady=5)
+        tk.Entry(self, textvariable=self.input_file_path, width=60).pack(pady=5)
+        tk.Button(self, text="Browse", command=self.browse_input_file).pack(pady=5)
+
+        # Display the detected file type
+        self.detected_type_label = tk.Label(
+            self, textvariable=self.file_type_label_var)
+        self.detected_type_label.pack(pady=5)
+
+        # Notice label for Excel filtering status
+        self.filter_notice_var = tk.StringVar(value="")
+        self.filter_notice_label = tk.Label(
+            self, textvariable=self.filter_notice_var)
+        self.filter_notice_label.pack(pady=2)
 
         tk.Label(self, text="Select Destination Folder").pack(pady=5)
         tk.Entry(self, textvariable=self.destination_dir, width=60).pack(pady=5)
         tk.Button(self, text="Browse", command=self.browse_destination).pack(pady=5)
-
-        # Date Filter with checkbox and date fields on the same line
-        date_filter_frame = tk.Frame(self)
-        date_filter_frame.pack(pady=5, fill=tk.X)
-        date_filter_inner_frame = tk.Frame(date_filter_frame)
-        date_filter_inner_frame.pack(anchor=tk.CENTER, expand=True)
-        tk.Checkbutton(date_filter_inner_frame, variable=self.use_date_filter, command=self.toggle_date_filter).pack(side=tk.LEFT, padx=5)
-        tk.Label(date_filter_inner_frame, text="Start Date:").pack(side=tk.LEFT)
-        self.start_date_entry = DateEntry(date_filter_inner_frame, date_pattern='yyyy-mm-dd',
-                                          year=2003, month=1, day=1)
-        self.start_date_entry.pack(side=tk.LEFT, padx=5)
-        tk.Label(date_filter_inner_frame, text="End Date:").pack(side=tk.LEFT)
-        self.end_date_entry = DateEntry(date_filter_inner_frame, textvariable=self.end_date, date_pattern='yyyy-mm-dd')
-        self.end_date_entry.pack(side=tk.LEFT, padx=5)
-
-        # Checkbox for using Excel filtering (enabled by default)
-        tk.Checkbutton(self, text="Use filtering from Excel", variable=self.use_excel_filter).pack(pady=5)
 
         # Buttons for starting/stopping download and conversion
         button_frame = tk.Frame(self)
@@ -90,20 +89,50 @@ class NSSDecisionDownloader(tk.Tk):
         # Summary storage
         self.summary = {"downloaded": 0, "skipped": 0, "replaced": 0, "failed": 0}
 
-        # Initialize the filter state
-        self.toggle_date_filter()
+        # Initialize the UI state
+        self.update_file_type()
 
     def open_link(self, url):
         """Open the given URL in the default web browser"""
         webbrowser.open_new(url)
 
-    def browse_xlsx(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
-        self.xlsx_file_path.set(file_path)
+    def browse_input_file(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Supported files", "*.xlsx *.xml"), ("All files", "*.*")])
+        if file_path:
+            self.input_file_path.set(file_path)
+            # detect_file_type will be triggered by trace on input_file_path
+            self.detect_file_type()
 
     def browse_destination(self):
         directory = filedialog.askdirectory()
         self.destination_dir.set(directory)
+
+    def update_file_type(self):
+        """Adjust UI elements based on selected file type."""
+        if self.file_type.get() == "xml":
+            self.use_excel_filter.set(False)
+            self.file_type_label_var.set("File Type: Search Results Export")
+            self.filter_notice_var.set("")
+        elif self.file_type.get() == "xlsx":
+            self.use_excel_filter.set(True)
+            self.file_type_label_var.set("File Type: Open Data")
+            self.filter_notice_var.set("Excel filtering is applied")
+        else:
+            self.use_excel_filter.set(False)
+            self.file_type_label_var.set("")
+            self.filter_notice_var.set("")
+
+    def detect_file_type(self, *_):
+        """Detect file type from the input file extension."""
+        path = self.input_file_path.get().lower()
+        if path.endswith(".xml"):
+            self.file_type.set("xml")
+        elif path.endswith(".xlsx"):
+            self.file_type.set("xlsx")
+        else:
+            self.file_type.set("")
+        self.update_file_type()
 
     def toggle_download(self):
         if self.downloading:
@@ -154,32 +183,28 @@ class NSSDecisionDownloader(tk.Tk):
         self.summary[status] += 1
 
     def start_download(self):
-        if not self.xlsx_file_path.get() or not self.destination_dir.get():
-            messagebox.showwarning("Input Error", "Please select both an Excel file and a destination folder.")
+        if not self.input_file_path.get() or not self.destination_dir.get():
+            messagebox.showwarning("Input Error", "Please select both an input file and a destination folder.")
             return
 
         self.progress_text.delete(1.0, tk.END)
         self.progress_text.insert(tk.END, "Starting download...\n")
         self.progress_bar["value"] = 0
 
-        # Gather filtering options
-        start_date = self.start_date_entry.get_date() if self.use_date_filter.get() else None
-        end_date = self.end_date_entry.get_date() if self.use_date_filter.get() else None
         # Decision Type filtering has been removed; always pass None.
         decision_type = None
-        use_excel_filter = self.use_excel_filter.get()
+        use_excel_filter = self.use_excel_filter.get() if self.file_type.get() == "xlsx" else False
 
         self.summary = {"downloaded": 0, "skipped": 0, "replaced": 0, "failed": 0}
 
         downloader = PDFDownloader(
-            self.xlsx_file_path.get(),
+            self.input_file_path.get(),
             self.destination_dir.get(),
             self.update_download_progress,
-            start_date=start_date,
-            end_date=end_date,
             decision_type=decision_type,
             use_excel_filter=use_excel_filter,
-            stop_callback=lambda: not self.downloading
+            stop_callback=lambda: not self.downloading,
+            file_type=self.file_type.get()
         )
         summary = downloader.download_pdfs()
 
@@ -236,11 +261,6 @@ class NSSDecisionDownloader(tk.Tk):
             self.progress_text.insert(tk.END, f"Replaced: {self.summary.get('replaced', 0)}\n")
             self.progress_text.insert(tk.END, f"Failed: {self.summary.get('failed', 0)}\n")
         self.progress_text.yview(tk.END)
-
-    def toggle_date_filter(self):
-        state = tk.NORMAL if self.use_date_filter.get() else tk.DISABLED
-        self.start_date_entry.config(state=state)
-        self.end_date_entry.config(state=state)
 
 if __name__ == "__main__":
     app = NSSDecisionDownloader()

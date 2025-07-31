@@ -5,7 +5,9 @@ import os
 import openpyxl  # Import openpyxl to handle filtered rows in Excel
 
 class PDFDownloader:
-    def __init__(self, file_path, destination_dir, progress_callback=None, start_date=None, end_date=None, decision_type=None, use_excel_filter=False, stop_callback=None):
+    def __init__(self, file_path, destination_dir, progress_callback=None,
+                 decision_type=None, use_excel_filter=False, stop_callback=None,
+                 file_type="xlsx"):
         self.file_path = file_path
         self.pdf_dir = os.path.join(destination_dir, "pdf")
         self.new_downloads = []
@@ -14,33 +16,18 @@ class PDFDownloader:
         self.failed_downloads = []
         self.progress_callback = progress_callback  # Callback function for progress updates
         self.stop_callback = stop_callback  # Callback to check if the download should stop
-        self.start_date = pd.to_datetime(start_date) if start_date else None
-        self.end_date = pd.to_datetime(end_date) if end_date else None
         self.decision_type = decision_type
         self.use_excel_filter = use_excel_filter  # Flag to determine if Excel filters should be respected
+        self.file_type = file_type  # 'xlsx' for open data, 'xml' for export from search engine
 
         # Create the pdf directory if it doesn't exist
         if not os.path.exists(self.pdf_dir):
             os.makedirs(self.pdf_dir)
 
     def download_pdfs(self):
-        # Check if we should use the Excel filters
-        if self.use_excel_filter:
-            # Load the Excel file using openpyxl to respect filters
-            wb = openpyxl.load_workbook(self.file_path, data_only=True)
-            sheet = wb.active
-            df = pd.DataFrame(sheet.values)  # Construct dataframe from sheet values
-            df = self._get_visible_rows(df, sheet)
-        else:
-            # Normal load if no filtering from Excel is required
-            df = pd.read_excel(self.file_path, sheet_name='List1')
+        df = self._load_dataframe()
 
-        # Convert the 'Datum rozhodnutí' column to datetime
-        df['Datum rozhodnutí'] = pd.to_datetime(df['Datum rozhodnutí'], format='%d.%m.%Y')
-
-        # Filter the DataFrame by date range and "Typ rozhodnutí" if provided
-        if self.start_date and self.end_date:
-            df = df[(df['Datum rozhodnutí'] >= self.start_date) & (df['Datum rozhodnutí'] <= self.end_date)]
+        # Filter the DataFrame by "Typ rozhodnutí" if provided
         if self.decision_type:
             df = df[df['Typ rozhodnutí'] == self.decision_type]
 
@@ -75,6 +62,27 @@ class PDFDownloader:
 
         # Reconstruct DataFrame with visible rows only
         return pd.DataFrame(visible_rows, columns=[cell.value for cell in sheet[1]])
+
+    def _load_dataframe(self):
+        """Load the input file and return a unified DataFrame with an 'Odkaz ECLI' column."""
+        if self.file_type == "xml":
+            df = pd.read_xml(self.file_path, parser="etree")
+            # Normalise column names to match the XLSX structure
+            if 'Datum' in df.columns:
+                df.rename(columns={'Datum': 'Datum rozhodnutí'}, inplace=True)
+            if 'Druh dokumentu' in df.columns:
+                df.rename(columns={'Druh dokumentu': 'Typ rozhodnutí'}, inplace=True)
+            if 'ECLI' in df.columns:
+                df['Odkaz ECLI'] = "http://vyhledavac.nssoud.cz/GetContent?ECLI=" + df['ECLI']
+        else:
+            if self.use_excel_filter:
+                wb = openpyxl.load_workbook(self.file_path, data_only=True)
+                sheet = wb.active
+                df = pd.DataFrame(sheet.values)
+                df = self._get_visible_rows(df, sheet)
+            else:
+                df = pd.read_excel(self.file_path, sheet_name='List1')
+        return df
 
     def _download_pdf(self, url):
         try:
@@ -122,10 +130,9 @@ if __name__ == "__main__":
     # Example usage in a console environment
     downloader = PDFDownloader(
         "otevrena_data_NSS-2024-08-15-small.xlsx", ".",
-        start_date='2010-01-01',
-        end_date='2024-08-15',
         decision_type='Meritorní',
-        use_excel_filter=True  # Set to True to test the filtering functionality
+        use_excel_filter=True,  # Set to True to test the filtering functionality
+        file_type="xlsx"
     )
     summary = downloader.download_pdfs()
 
